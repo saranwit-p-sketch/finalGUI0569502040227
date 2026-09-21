@@ -1,338 +1,486 @@
+import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit as st
 
-# ตั้งค่าหน้าเว็บให้เป็นแบบกว้าง (Wide Mode)
-st.set_page_config(page_title="Car Loan Comparison", layout="wide")
 
-# --- ส่วนหัวข้อหลัก ---
-st.title("🏎️ แดชบอร์ดเปรียบเทียบสินเชื่อรถยนต์ (Car Loan Comparison)")
-st.caption(
-    "อ่านข้อมูลจาก `car.csv` คำนวณดอกเบี้ยรวม ยอดชำระรวม และค่างวดผ่อนต่อเดือน"
-    " พร้อมบันทึกลง `car_output.csv`"
+# ==========================================
+# ตั้งค่าหน้าเว็บไซต์
+# ==========================================
+
+st.set_page_config(
+    page_title="แดชบอร์ดเปรียบเทียบสินเชื่อรถยนต์",
+    page_icon="🚗",
+    layout="wide"
 )
 
-# กำหนดราคารถยนต์พื้นฐาน
-CAR_PRICE = 1000000.00
 
-# --- การอ่านข้อมูลและการคำนวณ ---
-try:
-  df = pd.read_csv("car.csv")
+# ==========================================
+# ปรับแต่งหน้าเว็บไซต์
+# ==========================================
 
-  # ทำความสะอาดข้อมูลดอกเบี้ย (แปลงจาก '2.50%' เป็น float 0.025)
-  df["ดอกเบี้ย_num"] = (
-      df["ดอกเบี้ย/ปี"].astype(str).str.rstrip("%").astype("float") / 100
-  )
-  df["ระยะเวลา (ปี)"] = df["ระยะเวลา (ปี)"].astype(int)
+st.markdown("""
+<style>
 
-  # คำนวณตามหลักดอกเบี้ยคงที่ (Flat Rate)
-  df["ดอกเบี้ยรวม (บาท)"] = CAR_PRICE * df["ดอกเบี้ย_num"] * df["ระยะเวลา (ปี)"]
-  df["ยอดชำระรวม (บาท)"] = CAR_PRICE + df["ดอกเบี้ยรวม (บาท)"]
-  df["ผ่อน/เดือน (บาท)"] = df["ยอดชำระรวม (บาท)"] / (
-      df["ระยะเวลา (ปี)"] * 12
-  )
+.stApp {
+    background-color: #FFFFFF;
+}
 
-  # บันทึกผลลัพธ์ลงไฟล์ car_output.csv
-  output_df = df[[
-      "บริษัท",
-      "ดอกเบี้ย/ปี",
-      "ระยะเวลา (ปี)",
-      "ดอกเบี้ยรวม (บาท)",
-      "ยอดชำระรวม (บาท)",
-      "ผ่อน/เดือน (บาท)",
-  ]]
-  output_df.to_csv("car_output.csv", index=False, encoding="utf-8-sig")
+/* หัวข้อทั้งหมด */
+h1, h2, h3, h4, h5, h6 {
+    color: #000000 !important;
+}
 
-  # หาค่าสถิติสำหรับสร้าง Metric Cards
-  min_interest_row = df.loc[df["ดอกเบี้ยรวม (บาท)"].idxmin()]
-  min_monthly_row = df.loc[df["ผ่อน/เดือน (บาท)"].idxmin()]
-  avg_interest = df["ดอกเบี้ยรวม (บาท)"].mean()
+/* ข้อความทั่วไป */
+p {
+    color: #000000 !important;
+}
 
-  # --- 1. Metric Cards แสดงข้อมูลสรุปด้านบน ---
-  col1, col2, col3, col4 = st.columns(4)
+/* Caption */
+[data-testid="stCaptionContainer"] {
+    color: #000000 !important;
+}
 
-  with col1:
-    st.metric("ราคารถยนต์", f"฿{CAR_PRICE:,.2f}")
+/* Metric */
+[data-testid="stMetric"] {
+    background-color: #FFFFFF;
+    padding: 10px;
+}
 
-  with col2:
+[data-testid="stMetricLabel"] {
+    color: #000000 !important;
+}
+
+[data-testid="stMetricValue"] {
+    color: #000000 !important;
+}
+
+[data-testid="stMetricDelta"] {
+    color: #000000 !important;
+}
+
+/* ตาราง */
+[data-testid="stDataFrame"] {
+    color: #000000 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==========================================
+# อ่านข้อมูลจาก car_output.csv
+# ==========================================
+
+df = pd.read_csv("car_output.csv")
+
+
+# ==========================================
+# กำหนดราคารถยนต์
+# ==========================================
+
+car_price = 1000000
+
+
+# ==========================================
+# คำนวณยอดชำระรวม
+# ==========================================
+
+df["total_payment"] = car_price + df["total_rate"]
+
+
+# ==========================================
+# คำนวณค่างวดต่อเดือน
+# ==========================================
+
+df["monthly_payment"] = (
+    df["total_payment"] / (df["year"] * 12)
+)
+
+
+# ==========================================
+# หาค่าที่ต้องใช้ใน Dashboard
+# ==========================================
+
+lowest_interest = df["total_rate"].min()
+
+lowest_monthly = df["monthly_payment"].min()
+
+average_interest = df["total_rate"].mean()
+
+lowest_interest_company = df.loc[
+    df["total_rate"].idxmin(),
+    "company_name"
+]
+
+lowest_monthly_company = df.loc[
+    df["monthly_payment"].idxmin(),
+    "company_name"
+]
+
+
+# ==========================================
+# หัวข้อ Dashboard
+# ==========================================
+
+st.title(
+    "🚗 แดชบอร์ดเปรียบเทียบสินเชื่อรถยนต์ "
+    "(Car Loan Comparison)"
+)
+
+st.caption(
+    "อ่านข้อมูลจาก car.csv คำนวณดอกเบี้ยรวม "
+    "ยอดชำระรวม และค่างวดผ่อนต่อเดือน "
+    "พร้อมบันทึกข้อมูลลง car_output.csv"
+)
+
+
+st.divider()
+
+
+# ==========================================
+# แสดงข้อมูลสำคัญ
+# ==========================================
+
+col1, col2, col3, col4 = st.columns(4)
+
+
+# ------------------------------------------
+# ราคารถยนต์
+# ------------------------------------------
+
+with col1:
+
+    st.metric(
+        "ราคารถยนต์",
+        f"฿{car_price:,.2f}"
+    )
+
+
+# ------------------------------------------
+# ดอกเบี้ยรวมต่ำสุด
+# ------------------------------------------
+
+with col2:
+
     st.metric(
         "ดอกเบี้ยรวมต่ำสุด",
-        f"฿{min_interest_row['ดอกเบี้ยรวม (บาท)']:,.2f}",
-        delta=f"↑ บริษัท {min_interest_row['บริษัท']}",
-        delta_color="normal",
+        f"฿{lowest_interest:,.2f}",
+        f"↑ บริษัท {lowest_interest_company}"
     )
 
-  with col3:
+
+# ------------------------------------------
+# ค่างวดต่อเดือนต่ำสุด
+# ------------------------------------------
+
+with col3:
+
     st.metric(
-        "ผ่อน/เดือน ต่ำสุด",
-        f"฿{min_monthly_row['ผ่อน/เดือน (บาท)']:,.2f}",
-        delta=(
-            f"↑ บริษัท {min_monthly_row['บริษัท']}"
-            f" ({min_monthly_row['ระยะเวลา (ปี)']} ปี)"
-        ),
-        delta_color="normal",
+        "ค่างวด/เดือนต่ำสุด",
+        f"฿{lowest_monthly:,.2f}",
+        f"↑ บริษัท {lowest_monthly_company}"
     )
 
-  with col4:
-    st.metric("ดอกเบี้ยรวมเฉลี่ย", f"฿{avg_interest:,.2f}")
 
-  st.markdown("---")
+# ------------------------------------------
+# ดอกเบี้ยรวมเฉลี่ย
+# ------------------------------------------
 
-  # --- 2. ส่วนแสดงกราฟเปรียบเทียบ ---
-  st.subheader("📊 เปรียบเทียบดอกเบี้ยรวม ยอดชำระรวม และค่างวดผ่อนต่อเดือน")
+with col4:
 
-  chart_col1, chart_col2 = st.columns(2)
+    st.metric(
+        "ดอกเบี้ยรวมเฉลี่ย",
+        f"฿{average_interest:,.2f}"
+    )
 
-  # กำหนดพาเลตสีเฉพาะสำหรับแต่ละบริษัทให้ตรงตามภาพ
-  company_colors = {
-      "A": "#66C2A5",  # เขียวพาสเทล
-      "B": "#FC8D62",  # ส้มพาสเทล
-      "C": "#8DA0CB",  # ฟ้า/ม่วงพาสเทล
-      "D": "#E78AC3",  # ชมพูพาสเทล
-      "E": "#A6D854",  # เขียวมะนาว
-  }
 
-  with chart_col1:
-    # กราฟแท่งเปรียบเทียบดอกเบี้ยรวม (ใช้เฉดสีแดงเข้ม-อ่อนตามระยะเวลา)
-    fig_interest = px.bar(
+st.divider()
+
+
+# ==========================================
+# หัวข้อกราฟ
+# ==========================================
+
+st.subheader(
+    "📊 เปรียบเทียบดอกเบี้ยรวม ยอดชำระรวม "
+    "และค่างวดผ่อนต่อเดือน"
+)
+
+
+# ==========================================
+# แบ่งพื้นที่กราฟเป็น 2 ช่อง
+# ==========================================
+
+chart_col1, chart_col2 = st.columns(2)
+
+
+# ==========================================
+# กราฟที่ 1 ดอกเบี้ยรวม
+# ==========================================
+
+with chart_col1:
+
+    st.write(
+        "**เปรียบเทียบดอกเบี้ยรวมของแต่ละบริษัท (บาท)**"
+    )
+
+    interest_chart = px.bar(
         df,
-        x="บริษัท",
-        y="ดอกเบี้ยรวม (บาท)",
-        color="ระยะเวลา (ปี)",
-        title="เปรียบเทียบดอกเบี้ยรวมตลอดสัญญา (บาท)",
-        text_auto=",.2f",
-        color_continuous_scale="Reds",
+        x="company_name",
+        y="total_rate",
+        text="total_rate",
+        color="total_rate",
+        color_continuous_scale=[
+            "#F8E9E5",
+            "#E8B8B2",
+            "#7A0019"
+        ]
     )
-    fig_interest.update_layout(
+
+    # ตัวเลขบนแท่งกราฟ
+    interest_chart.update_traces(
+        texttemplate="%{text:,.2f}",
+        textposition="outside",
+        textfont=dict(
+            color="black"
+        )
+    )
+
+    # ตั้งค่าสีตัวอักษรทั้งหมดในกราฟ
+    interest_chart.update_layout(
+        xaxis_title="บริษัทสินเชื่อ",
         yaxis_title="ดอกเบี้ยรวม (บาท)",
-        xaxis_title="บริษัทข้อเสนอ",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-    )
-    # จัดข้อความบนแท่งกราฟให้อยู่ข้างในแถบ
-    fig_interest.update_traces(
-        textposition="inside", insidetextanchor="middle"
-    )
-    st.plotly_chart(fig_interest, use_container_width=True)
 
-  with chart_col2:
-    # กราฟแท่งเปรียบเทียบค่างวดผ่อนต่อเดือน (แยกสีตามบริษัท)
-    fig_monthly = px.bar(
+        coloraxis_colorbar_title="ดอกเบี้ย",
+
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+
+        font=dict(
+            color="black"
+        ),
+
+        xaxis=dict(
+            tickfont=dict(
+                color="black"
+            ),
+            title_font=dict(
+                color="black"
+            )
+        ),
+
+        yaxis=dict(
+            tickfont=dict(
+                color="black"
+            ),
+            title_font=dict(
+                color="black"
+            )
+        ),
+
+        coloraxis_colorbar=dict(
+            tickfont=dict(
+                color="black"
+            ),
+            title_font=dict(
+                color="black"
+            )
+        ),
+
+        margin=dict(
+            l=20,
+            r=20,
+            t=30,
+            b=20
+        )
+    )
+
+    st.plotly_chart(
+        interest_chart,
+        use_container_width=True
+    )
+
+
+# ==========================================
+# กราฟที่ 2 ค่างวดต่อเดือน
+# ==========================================
+
+with chart_col2:
+
+    st.write(
+        "**เปรียบเทียบค่างวดผ่อนต่อเดือน (บาท/เดือน)**"
+    )
+
+    monthly_chart = px.bar(
         df,
-        x="บริษัท",
-        y="ผ่อน/เดือน (บาท)",
-        color="บริษัท",
-        title="เปรียบเทียบค่างวดผ่อนชำระต่อเดือน (บาท/เดือน)",
-        text_auto=",.2f",
-        color_discrete_map=company_colors,
+        x="company_name",
+        y="monthly_payment",
+        text="monthly_payment",
+        color="company_name",
+        color_discrete_map={
+            "A": "#72C3A5",
+            "B": "#F58A61",
+            "C": "#8FA0CC",
+            "D": "#D67FC0",
+            "E": "#A8D84E"
+        }
     )
-    fig_monthly.update_layout(
-        yaxis_title="ผ่อน/เดือน (บาท)",
-        xaxis_title="บริษัทข้อเสนอ",
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
+
+    # ตัวเลขบนแท่งกราฟ
+    monthly_chart.update_traces(
+        texttemplate="%{text:,.2f}",
+        textposition="outside",
+        textfont=dict(
+            color="black"
+        )
     )
-    fig_monthly.update_traces(
-        textposition="inside", insidetextanchor="middle"
+
+    # ตั้งค่าสีตัวอักษรทั้งหมดในกราฟ
+    monthly_chart.update_layout(
+        xaxis_title="บริษัทสินเชื่อ",
+        yaxis_title="ค่างวด/เดือน (บาท)",
+
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+
+        font=dict(
+            color="black"
+        ),
+
+        xaxis=dict(
+            tickfont=dict(
+                color="black"
+            ),
+            title_font=dict(
+                color="black"
+            )
+        ),
+
+        yaxis=dict(
+            tickfont=dict(
+                color="black"
+            ),
+            title_font=dict(
+                color="black"
+            )
+        ),
+
+        legend=dict(
+            font=dict(
+                color="black"
+            ),
+            title_font=dict(
+                color="black"
+            )
+        ),
+
+        margin=dict(
+            l=20,
+            r=20,
+            t=30,
+            b=20
+        )
     )
-    st.plotly_chart(fig_monthly, use_container_width=True)
 
-  st.markdown("---")
+    st.plotly_chart(
+        monthly_chart,
+        use_container_width=True
+    )
 
-  # --- 3. ส่วนแสดงตารางข้อมูล ---
-  st.subheader("📋 ตารางเปรียบเทียบเงื่อนไขสินเชื่อรถยนต์")
 
-  # ฟังก์ชันไฮไลต์สีเขียวอ่อนสำหรับค่าที่น้อยที่สุดในคอลัมน์
-  def highlight_min(s):
-    is_min = s == s.min()
-    return ["background-color: #D1E7DD; color: #0F5132" if v else "" for v in is_min]
+st.divider()
 
-  # แสดงตารางพร้อมเน้นสีช่องข้อมูลและฟอร์แมตตัวเลข
-  styled_df = (
-      output_df.style.format({
-          "ดอกเบี้ยรวม (บาท)": "{:,.2f}",
-          "ยอดชำระรวม (บาท)": "{:,.2f}",
-          "ผ่อน/เดือน (บาท)": "{:,.2f}",
-      })
-      .apply(highlight_min, subset=["ดอกเบี้ยรวม (บาท)"])
-      .apply(highlight_min, subset=["ผ่อน/เดือน (บาท)"])
-  )
 
-  st.dataframe(styled_df, use_container_width=True)
+# ==========================================
+# ตารางเปรียบเทียบ
+# ==========================================
 
-except FileNotFoundError:
-  st.error(
-      "ไม่พบไฟล์ `car.csv` กรุณาตรวจสอบว่ามีไฟล์นี้อยู่ใน Directory"
-      " เดียวกับโปรแกรมหรือไม่"
-  )
-import pandas as pd
-import plotly.express as px
-import streamlit as st
-
-# ตั้งค่าหน้าเว็บ
-st.set_page_config(page_title="Car Loan Comparison", layout="wide")
-
-# --- ส่วนหัวข้อหลัก ---
-st.title("🏎️ แดชบอร์ดเปรียบเทียบสินเชื่อรถยนต์ (Car Loan Comparison)")
-st.caption(
-    "อ่านข้อมูลจาก `car.csv` คำนวณดอกเบี้ยรวม ยอดชำระรวม และค่างวดผ่อนต่อเดือน"
-    " พร้อมบันทึกลง `car_output.csv`"
+st.subheader(
+    "📋 ตารางเปรียบเทียบเงื่อนไขสินเชื่อรถยนต์"
 )
 
-CAR_PRICE = 1000000.00
 
-try:
-  # อ่านไฟล์พร้อมรองรับ Encoding ภาษาไทย
-  try:
-    df = pd.read_csv("car.csv", encoding="utf-8-sig")
-  except Exception:
-    df = pd.read_csv("car.csv", encoding="utf-8")
+# สร้างสำเนาข้อมูลสำหรับแสดง
+display_df = df.copy()
 
-  # ลบช่องว่างส่วนเกินในชื่อคอลัมน์
-  df.columns = df.columns.str.strip()
 
-  # ค้นหาคอลัมน์ดอกเบี้ยอัตโนมัติ (ไม่ว่าจะชื่อ ดอกเบี้ย/ปี, ดอกเบี้ย, หรือ Interest)
-  interest_col = None
-  for col in df.columns:
-    if "ดอกเบี้ย" in col or "interest" in col.lower():
-      interest_col = col
-      break
+# ==========================================
+# จัดรูปแบบข้อมูล
+# ==========================================
 
-  # ค้นหาคอลัมน์ระยะเวลาอัตโนมัติ
-  period_col = None
-  for col in df.columns:
-    if "ระยะเวลา" in col or "ปี" in col or "year" in col.lower():
-      period_col = col
-      break
+display_df["rate"] = display_df["rate"].map(
+    lambda x: f"{x:.2f}%"
+)
 
-  company_col = df.columns[0]  # สมมติคอลัมน์แรกคือชื่อบริษัท
+display_df["total_rate"] = display_df["total_rate"].map(
+    lambda x: f"{x:,.2f}"
+)
 
-  if not interest_col or not period_col:
-    st.error(
-        f"⚠️ ชื่อคอลัมน์ในไฟล์ `car.csv` ไม่ถูกต้อง! คอลัมน์ปัจจุบันที่มีคือ:"
-        f" {list(df.columns)}"
-    )
-    st.stop()
+display_df["total_payment"] = display_df["total_payment"].map(
+    lambda x: f"{x:,.2f}"
+)
 
-  # ทำความสะอาดข้อมูลดอกเบี้ย
-  df["ดอกเบี้ย_num"] = (
-      df[interest_col].astype(str).str.rstrip("%").astype("float") / 100
-  )
-  df["ระยะเวลา (ปี)"] = df[period_col].astype(str).str.extract(r"(\d+)").astype(int)
+display_df["monthly_payment"] = display_df["monthly_payment"].map(
+    lambda x: f"{x:,.2f}"
+)
 
-  # คำนวณตามหลักดอกเบี้ยคงที่ (Flat Rate)
-  df["ดอกเบี้ยรวม (บาท)"] = CAR_PRICE * df["ดอกเบี้ย_num"] * df["ระยะเวลา (ปี)"]
-  df["ยอดชำระรวม (บาท)"] = CAR_PRICE + df["ดอกเบี้ยรวม (บาท)"]
-  df["ผ่อน/เดือน (บาท)"] = df["ยอดชำระรวม (บาท)"] / (
-      df["ระยะเวลา (ปี)"] * 12
-  )
 
-  # บันทึกผลลัพธ์ลงไฟล์ car_output.csv
-  output_df = pd.DataFrame({
-      "บริษัท": df[company_col],
-      "ดอกเบี้ย/ปี": df[interest_col],
-      "ระยะเวลา (ปี)": df["ระยะเวลา (ปี)"],
-      "ดอกเบี้ยรวม (บาท)": df["ดอกเบี้ยรวม (บาท)"],
-      "ยอดชำระรวม (บาท)": df["ยอดชำระรวม (บาท)"],
-      "ผ่อน/เดือน (บาท)": df["ผ่อน/เดือน (บาท)"],
-  })
-  output_df.to_csv("car_output.csv", index=False, encoding="utf-8-sig")
+# ==========================================
+# เปลี่ยนชื่อหัวตาราง
+# ==========================================
 
-  # สถิติสำหรับ Metric Cards
-  min_interest_row = df.loc[df["ดอกเบี้ยรวม (บาท)"].idxmin()]
-  min_monthly_row = df.loc[df["ผ่อน/เดือน (บาท)"].idxmin()]
-  avg_interest = df["ดอกเบี้ยรวม (บาท)"].mean()
+display_df.columns = [
+    "บริษัท",
+    "ดอกเบี้ย/ปี",
+    "ระยะเวลา (ปี)",
+    "ดอกเบี้ยรวม (บาท)",
+    "ยอดชำระรวม (บาท)",
+    "ค่างวด/เดือน (บาท)"
+]
 
-  # --- 1. Metric Cards ---
-  col1, col2, col3, col4 = st.columns(4)
-  with col1:
-    st.metric("ราคารถยนต์", f"฿{CAR_PRICE:,.2f}")
-  with col2:
-    st.metric(
-        "ดอกเบี้ยรวมต่ำสุด",
-        f"฿{min_interest_row['ดอกเบี้ยรวม (บาท)']:,.2f}",
-        delta=f"↑ บริษัท {min_interest_row[company_col]}",
-        delta_color="normal",
-    )
-  with col3:
-    st.metric(
-        "ผ่อน/เดือน ต่ำสุด",
-        f"฿{min_monthly_row['ผ่อน/เดือน (บาท)']:,.2f}",
-        delta=(
-            f"↑ บริษัท {min_monthly_row[company_col]}"
-            f" ({min_monthly_row['ระยะเวลา (ปี)']} ปี)"
-        ),
-        delta_color="normal",
-    )
-  with col4:
-    st.metric("ดอกเบี้ยรวมเฉลี่ย", f"฿{avg_interest:,.2f}")
 
-  st.markdown("---")
+# ==========================================
+# แสดงตาราง
+# ==========================================
 
-  # --- 2. กราฟเปรียบเทียบ ---
-  st.subheader("📊 เปรียบเทียบดอกเบี้ยรวม ยอดชำระรวม และค่างวดผ่อนต่อเดือน")
-  chart_col1, chart_col2 = st.columns(2)
+st.dataframe(
+    display_df,
+    use_container_width=True,
+    hide_index=True
+)
 
-  company_colors = {
-      "A": "#66C2A5",
-      "B": "#FC8D62",
-      "C": "#8DA0CB",
-      "D": "#E78AC3",
-      "E": "#A6D854",
-  }
 
-  with chart_col1:
-    fig_interest = px.bar(
-        df,
-        x=company_col,
-        y="ดอกเบี้ยรวม (บาท)",
-        color="ระยะเวลา (ปี)",
-        title="เปรียบเทียบดอกเบี้ยรวมตลอดสัญญา (บาท)",
-        text_auto=",.2f",
-        color_continuous_scale="Reds",
-    )
-    fig_interest.update_layout(
-        yaxis_title="ดอกเบี้ยรวม (บาท)", xaxis_title="บริษัทข้อเสนอ"
-    )
-    fig_interest.update_traces(textposition="inside", insidetextanchor="middle")
-    st.plotly_chart(fig_interest, use_container_width=True)
+st.divider()
 
-  with chart_col2:
-    fig_monthly = px.bar(
-        df,
-        x=company_col,
-        y="ผ่อน/เดือน (บาท)",
-        color=company_col,
-        title="เปรียบเทียบค่างวดผ่อนชำระต่อเดือน (บาท/เดือน)",
-        text_auto=",.2f",
-        color_discrete_map=company_colors,
-    )
-    fig_monthly.update_layout(
-        yaxis_title="ผ่อน/เดือน (บาท)", xaxis_title="บริษัทข้อเสนอ"
-    )
-    fig_monthly.update_traces(textposition="inside", insidetextanchor="middle")
-    st.plotly_chart(fig_monthly, use_container_width=True)
 
-  st.markdown("---")
+# ==========================================
+# สรุปข้อมูล
+# ==========================================
 
-  # --- 3. ตารางข้อมูล ---
-  st.subheader("📋 ตารางเปรียบเทียบเงื่อนไขสินเชื่อรถยนต์")
+st.subheader("📝 สรุปข้อมูล")
 
-  def highlight_min(s):
-    is_min = s == s.min()
-    return ["background-color: #D1E7DD; color: #0F5132" if v else "" for v in is_min]
 
-  styled_df = (
-      output_df.style.format({
-          "ดอกเบี้ยรวม (บาท)": "{:,.2f}",
-          "ยอดชำระรวม (บาท)": "{:,.2f}",
-          "ผ่อน/เดือน (บาท)": "{:,.2f}",
-      })
-      .apply(highlight_min, subset=["ดอกเบี้ยรวม (บาท)"])
-      .apply(highlight_min, subset=["ผ่อน/เดือน (บาท)"])
-  )
+st.write(
+    f"ราคารถยนต์ที่ใช้ในการคำนวณ : "
+    f"**฿{car_price:,.2f}**"
+)
 
-  st.dataframe(styled_df, use_container_width=True)
 
-except FileNotFoundError:
-  st.error("ไม่พบไฟล์ `car.csv` กรุณาอัปโหลดไฟล์ `car.csv` ขึ้น GitHub")
+st.write(
+    f"บริษัทที่มีดอกเบี้ยรวมต่ำสุด : "
+    f"**บริษัท {lowest_interest_company}** "
+    f"จำนวน **฿{lowest_interest:,.2f}**"
+)
+
+
+st.write(
+    f"บริษัทที่มีค่างวดต่อเดือนต่ำสุด : "
+    f"**บริษัท {lowest_monthly_company}** "
+    f"จำนวน **฿{lowest_monthly:,.2f} ต่อเดือน**"
+)
+
+
+st.write(
+    f"ดอกเบี้ยรวมเฉลี่ยของทุกบริษัท : "
+    f"**฿{average_interest:,.2f}**"
+)
